@@ -3,10 +3,14 @@
     --snake-color: #39FF14;
     --food-color: #FF007F;
     --obstacle-color: #FFA500;
+    --poison-color: #9D00FF;
+    --scissor-color: #00D4FF;
     --text-color: #ffffff;
     --neon-shadow: 0 0 10px rgba(57, 255, 20, 0.7);
     --food-shadow: 0 0 15px rgba(255, 0, 127, 0.8);
     --obstacle-shadow: 0 0 10px rgba(255, 165, 0, 0.7);
+    --poison-shadow: 0 0 15px rgba(157, 0, 255, 0.8);
+    --scissor-shadow: 0 0 15px rgba(0, 212, 255, 0.8);
 }
 
 * {
@@ -53,8 +57,22 @@ h1 {
 .score-board {
     display: flex;
     justify-content: space-around;
+    align-items: center;
     font-weight: bold;
     font-size: 1.2rem;
+    min-height: 40px;
+}
+
+.status-item {
+    color: var(--poison-color);
+    text-shadow: 0 0 10px var(--poison-color);
+    font-size: 0.9rem;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
 }
 
 #game-wrapper {

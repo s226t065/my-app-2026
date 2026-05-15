@@ -11,15 +11,19 @@ const restartBtn = document.getElementById('restart-btn');
 const headUpload = document.getElementById('head-image-upload');
 const obstacleModeToggle = document.getElementById('obstacle-mode');
 const speedInputs = document.getElementsByName('speed');
+const statusDisplay = document.getElementById('status-display');
 
 // Constants
 const GRID_SIZE = 20;
 const MIN_MOVE_INTERVAL = 40;
 const MAX_OBSTACLES = 15;
+const POISON_DURATION = 10000; // 10 seconds
 
 // Game State
-let snake = []; // Array of {x, y} grid coordinates
+let snake = [];
 let food = {};
+let poisonApple = null;
+let scissors = null;
 let obstacles = [];
 let direction = { x: 1, y: 0 };
 let nextDirection = { x: 1, y: 0 };
@@ -34,6 +38,10 @@ let animationId = null;
 let headImage = null;
 let isObstacleMode = false;
 
+let isReversed = false;
+let poisonTimeout = null;
+let scissorsSpawned = false;
+
 // Handle Image Upload
 headUpload.addEventListener('change', (e) => {
     const file = e.target.files[0];
@@ -41,9 +49,7 @@ headUpload.addEventListener('change', (e) => {
         const reader = new FileReader();
         reader.onload = (event) => {
             const img = new Image();
-            img.onload = () => {
-                headImage = img;
-            };
+            img.onload = () => { headImage = img; };
             img.src = event.target.result;
         };
         reader.readAsDataURL(file);
@@ -64,11 +70,16 @@ function initGame() {
         { x: 3, y: 5 }
     ];
     obstacles = [];
+    poisonApple = null;
+    scissors = null;
     direction = { x: 1, y: 0 };
     nextDirection = { x: 1, y: 0 };
     score = 0;
+    isReversed = false;
+    scissorsSpawned = false;
+    statusDisplay.classList.add('hidden');
+    clearTimeout(poisonTimeout);
 
-    // Set speed based on selection
     let selectedSpeed = 150;
     speedInputs.forEach(input => {
         if (input.checked) selectedSpeed = parseInt(input.value);
@@ -83,41 +94,43 @@ function initGame() {
     createFood();
 }
 
-function createFood() {
+function getSafeRandomPos() {
     const cols = canvas.width / GRID_SIZE;
     const rows = canvas.height / GRID_SIZE;
-    food = {
+    const pos = {
         x: Math.floor(Math.random() * cols),
         y: Math.floor(Math.random() * rows)
     };
-    // Check if food is on snake or obstacles
-    const isOnSnake = snake.some(seg => seg.x === food.x && seg.y === food.y);
-    const isOnObstacle = obstacles.some(obs => obs.x === food.x && obs.y === food.y);
-    if (isOnSnake || isOnObstacle) {
-        createFood();
+    const isOnSnake = snake.some(seg => seg.x === pos.x && seg.y === pos.y);
+    const isOnObstacle = obstacles.some(obs => obs.x === pos.x && obs.y === pos.y);
+    const isOnFood = food && food.x === pos.x && food.y === pos.y;
+    const isOnPoison = poisonApple && poisonApple.x === pos.x && poisonApple.y === pos.y;
+    const isOnScissors = scissors && scissors.x === pos.x && scissors.y === pos.y;
+
+    if (isOnSnake || isOnObstacle || isOnFood || isOnPoison || isOnScissors) {
+        return getSafeRandomPos();
+    }
+    return pos;
+}
+
+function createFood() {
+    food = getSafeRandomPos();
+    // Randomly spawn poison apple (20% chance)
+    if (Math.random() < 0.2 && !poisonApple) {
+        poisonApple = getSafeRandomPos();
+    }
+}
+
+function spawnScissors() {
+    if (!scissorsSpawned && score >= 300) {
+        scissors = getSafeRandomPos();
+        scissorsSpawned = true;
     }
 }
 
 function addObstacle() {
     if (obstacles.length >= MAX_OBSTACLES) return;
-    
-    const cols = canvas.width / GRID_SIZE;
-    const rows = canvas.height / GRID_SIZE;
-    const newObs = {
-        x: Math.floor(Math.random() * cols),
-        y: Math.floor(Math.random() * rows)
-    };
-    
-    // Ensure obstacle is not on snake, food, or other obstacles
-    const isOnSnake = snake.some(seg => seg.x === newObs.x && seg.y === newObs.y);
-    const isOnFood = food.x === newObs.x && food.y === newObs.y;
-    const isOnObstacle = obstacles.some(obs => obs.x === newObs.x && obs.y === newObs.y);
-    
-    if (isOnSnake || isOnFood || isOnObstacle) {
-        addObstacle();
-    } else {
-        obstacles.push(newObs);
-    }
+    obstacles.push(getSafeRandomPos());
 }
 
 function update(currentTime) {
@@ -130,13 +143,16 @@ function update(currentTime) {
     
     const deltaTime = currentTime - lastMoveTime;
 
-    // Add obstacle every 10 seconds if mode is on
     if (isObstacleMode && obstacles.length < MAX_OBSTACLES) {
-        const obstacleDelta = currentTime - lastObstacleAddTime;
-        if (obstacleDelta >= 10000) { // 10 seconds
+        if (currentTime - lastObstacleAddTime >= 10000) {
             addObstacle();
             lastObstacleAddTime = currentTime;
         }
+    }
+
+    // Check for scissors spawn
+    if (score >= 300 && !scissorsSpawned) {
+        spawnScissors();
     }
 
     if (deltaTime >= moveInterval) {
@@ -155,36 +171,57 @@ function move() {
     // Wall collision
     const cols = canvas.width / GRID_SIZE;
     const rows = canvas.height / GRID_SIZE;
-    if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) {
-        return gameOver();
-    }
+    if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) return gameOver();
 
     // Self collision
-    if (snake.some(seg => seg.x === head.x && seg.y === head.y)) {
-        return gameOver();
-    }
+    if (snake.some(seg => seg.x === head.x && seg.y === head.y)) return gameOver();
 
     // Obstacle collision
-    if (isObstacleMode && obstacles.some(obs => obs.x === head.x && obs.y === head.y)) {
-        return gameOver();
-    }
+    if (isObstacleMode && obstacles.some(obs => obs.x === head.x && obs.y === head.y)) return gameOver();
 
     snake.unshift(head);
 
     // Food collision
     if (head.x === food.x && head.y === food.y) {
-        score += 10;
-        currentScoreEl.textContent = score;
-        if (score > highScore) {
-            highScore = score;
-            highScoreEl.textContent = highScore;
-            localStorage.setItem('snakeHighScore', highScore);
-        }
+        handleScore(10);
         createFood();
         if (moveInterval > MIN_MOVE_INTERVAL) moveInterval -= 2;
-    } else {
+    } 
+    // Poison Apple collision
+    else if (poisonApple && head.x === poisonApple.x && head.y === poisonApple.y) {
+        handleScore(30);
+        activatePoison();
+        poisonApple = null;
+    }
+    // Scissors collision
+    else if (scissors && head.x === scissors.x && head.y === scissors.y) {
+        const newLength = Math.max(3, Math.floor(snake.length / 2));
+        while (snake.length > newLength) snake.pop();
+        scissors = null;
+    }
+    else {
         snake.pop();
     }
+}
+
+function handleScore(pts) {
+    score += pts;
+    currentScoreEl.textContent = score;
+    if (score > highScore) {
+        highScore = score;
+        highScoreEl.textContent = highScore;
+        localStorage.setItem('snakeHighScore', highScore);
+    }
+}
+
+function activatePoison() {
+    isReversed = true;
+    statusDisplay.classList.remove('hidden');
+    clearTimeout(poisonTimeout);
+    poisonTimeout = setTimeout(() => {
+        isReversed = false;
+        statusDisplay.classList.add('hidden');
+    }, POISON_DURATION);
 }
 
 function draw(currentTime) {
@@ -203,33 +240,43 @@ function draw(currentTime) {
         });
     }
 
+    // Draw Poison Apple
+    if (poisonApple) {
+        ctx.fillStyle = '#9D00FF';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#9D00FF';
+        ctx.fillRect(poisonApple.x * GRID_SIZE + 4, poisonApple.y * GRID_SIZE + 4, GRID_SIZE - 8, GRID_SIZE - 8);
+    }
+
+    // Draw Scissors
+    if (scissors) {
+        ctx.fillStyle = '#00D4FF';
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = '#00D4FF';
+        ctx.font = `${GRID_SIZE}px Arial`;
+        ctx.fillText('✂️', scissors.x * GRID_SIZE, (scissors.y + 1) * GRID_SIZE - 2);
+    }
+
     // Draw Food
     ctx.fillStyle = '#FF007F';
     ctx.shadowBlur = 15;
     ctx.shadowColor = '#FF007F';
     ctx.beginPath();
-    ctx.arc(
-        food.x * GRID_SIZE + GRID_SIZE / 2,
-        food.y * GRID_SIZE + GRID_SIZE / 2,
-        GRID_SIZE / 2 - 2, 0, Math.PI * 2
-    );
+    ctx.arc(food.x * GRID_SIZE + GRID_SIZE / 2, food.y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 2 - 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Draw Snake with interpolation
+    // Draw Snake
     snake.forEach((seg, i) => {
         let drawX, drawY;
-
         if (i === 0) {
             const prevX = seg.x - direction.x;
             const prevY = seg.y - direction.y;
             drawX = (prevX + (seg.x - prevX) * progress) * GRID_SIZE;
             drawY = (prevY + (seg.y - prevY) * progress) * GRID_SIZE;
-
             if (headImage) {
                 ctx.save();
                 ctx.translate(drawX + GRID_SIZE / 2, drawY + GRID_SIZE / 2);
-                const angle = Math.atan2(direction.y, direction.x);
-                ctx.rotate(angle);
+                ctx.rotate(Math.atan2(direction.y, direction.x));
                 ctx.drawImage(headImage, -GRID_SIZE / 2 + 1, -GRID_SIZE / 2 + 1, GRID_SIZE - 2, GRID_SIZE - 2);
                 ctx.restore();
                 return;
@@ -239,14 +286,11 @@ function draw(currentTime) {
             drawX = (seg.x + (target.x - seg.x) * progress) * GRID_SIZE;
             drawY = (seg.y + (target.y - seg.y) * progress) * GRID_SIZE;
         }
-
         ctx.fillStyle = i === 0 ? '#39FF14' : '#2ecc71';
         ctx.shadowBlur = i === 0 ? 15 : 5;
         ctx.shadowColor = '#39FF14';
-        const padding = 1;
-        ctx.fillRect(drawX + padding, drawY + padding, GRID_SIZE - padding * 2, GRID_SIZE - padding * 2);
+        ctx.fillRect(drawX + 1, drawY + 1, GRID_SIZE - 2, GRID_SIZE - 2);
     });
-
     ctx.shadowBlur = 0;
 }
 
@@ -270,18 +314,23 @@ function startGame() {
 
 const handleInput = (key) => {
     if (isPaused || isGameOver) return;
-    if ((key === 'ArrowUp' || key === 'w') && direction.y === 0) nextDirection = { x: 0, y: -1 };
-    if ((key === 'ArrowDown' || key === 's') && direction.y === 0) nextDirection = { x: 0, y: 1 };
-    if ((key === 'ArrowLeft' || key === 'a') && direction.x === 0) nextDirection = { x: -1, y: 0 };
-    if ((key === 'ArrowRight' || key === 'd') && direction.x === 0) nextDirection = { x: 1, y: 0 };
+    let moveKey = key;
+    if (isReversed) {
+        if (key === 'ArrowUp' || key === 'w') moveKey = 'ArrowDown';
+        else if (key === 'ArrowDown' || key === 's') moveKey = 'ArrowUp';
+        else if (key === 'ArrowLeft' || key === 'a') moveKey = 'ArrowRight';
+        else if (key === 'ArrowRight' || key === 'd') moveKey = 'ArrowLeft';
+    }
+
+    if ((moveKey === 'ArrowUp' || moveKey === 'w') && direction.y === 0) nextDirection = { x: 0, y: -1 };
+    if ((moveKey === 'ArrowDown' || moveKey === 's') && direction.y === 0) nextDirection = { x: 0, y: 1 };
+    if ((moveKey === 'ArrowLeft' || moveKey === 'a') && direction.x === 0) nextDirection = { x: -1, y: 0 };
+    if ((moveKey === 'ArrowRight' || moveKey === 'd') && direction.x === 0) nextDirection = { x: 1, y: 0 };
 };
 
 document.addEventListener('keydown', (e) => {
-    if (overlay.classList.contains('hidden')) {
-        handleInput(e.key);
-    } else if (!isGameOver && e.key !== 'Tab') {
-        startGame();
-    }
+    if (overlay.classList.contains('hidden')) handleInput(e.key);
+    else if (!isGameOver && e.key !== 'Tab') startGame();
 });
 
 let touchStartX = 0;
@@ -290,16 +339,12 @@ document.addEventListener('touchstart', e => {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
 }, false);
-
 document.addEventListener('touchmove', e => {
     if (!touchStartX || !touchStartY || isPaused) return;
     const diffX = touchStartX - e.touches[0].clientX;
     const diffY = touchStartY - e.touches[0].clientY;
-    if (Math.abs(diffX) > Math.abs(diffY)) {
-        handleInput(diffX > 0 ? 'ArrowLeft' : 'ArrowRight');
-    } else {
-        handleInput(diffY > 0 ? 'ArrowUp' : 'ArrowDown');
-    }
+    if (Math.abs(diffX) > Math.abs(diffY)) handleInput(diffX > 0 ? 'ArrowLeft' : 'ArrowRight');
+    else handleInput(diffY > 0 ? 'ArrowUp' : 'ArrowDown');
     touchStartX = 0; touchStartY = 0;
     e.preventDefault();
 }, { passive: false });
@@ -309,6 +354,4 @@ restartBtn.addEventListener('click', startGame);
 
 initGame();
 draw(0);
-window.addEventListener('resize', () => {
-    if (isPaused) { resizeCanvas(); draw(0); }
-});
+window.addEventListener('resize', () => { if (isPaused) { resizeCanvas(); draw(0); } });
