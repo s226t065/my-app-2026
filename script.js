@@ -10,11 +10,11 @@ const startBtn = document.getElementById('start-btn');
 const restartBtn = document.getElementById('restart-btn');
 const headUpload = document.getElementById('head-image-upload');
 const obstacleModeToggle = document.getElementById('obstacle-mode');
+const speedInputs = document.getElementsByName('speed');
 
 // Constants
 const GRID_SIZE = 20;
-const INITIAL_MOVE_INTERVAL = 150; // ms per grid move
-const MIN_MOVE_INTERVAL = 60;
+const MIN_MOVE_INTERVAL = 40;
 const MAX_OBSTACLES = 15;
 
 // Game State
@@ -27,7 +27,7 @@ let score = 0;
 let highScore = localStorage.getItem('snakeHighScore') || 0;
 let lastMoveTime = 0;
 let lastObstacleAddTime = 0;
-let moveInterval = INITIAL_MOVE_INTERVAL;
+let moveInterval = 150;
 let isGameOver = false;
 let isPaused = true;
 let animationId = null;
@@ -67,7 +67,14 @@ function initGame() {
     direction = { x: 1, y: 0 };
     nextDirection = { x: 1, y: 0 };
     score = 0;
-    moveInterval = INITIAL_MOVE_INTERVAL;
+
+    // Set speed based on selection
+    let selectedSpeed = 150;
+    speedInputs.forEach(input => {
+        if (input.checked) selectedSpeed = parseInt(input.value);
+    });
+    moveInterval = selectedSpeed;
+
     isGameOver = false;
     isPaused = true;
     currentScoreEl.textContent = score;

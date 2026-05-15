@@ -143,6 +143,44 @@ input:checked + .slider:before {
     transform: translateX(20px);
 }
 
+/* Speed Selector Style */
+.speed-selector {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.speed-options {
+    display: flex;
+    gap: 10px;
+    width: 100%;
+}
+
+.speed-options label {
+    flex: 1;
+    cursor: pointer;
+}
+
+.speed-options input {
+    display: none;
+}
+
+.speed-options span {
+    display: block;
+    padding: 6px;
+    text-align: center;
+    border: 1px solid #555;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.speed-options input:checked + span {
+    border-color: var(--snake-color);
+    color: var(--snake-color);
+    box-shadow: inset 0 0 5px var(--snake-color);
+}
+
 button {
     margin-top: 20px;
     padding: 12px 24px;
