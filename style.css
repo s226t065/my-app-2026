@@ -225,6 +225,12 @@ button:hover {
     margin-bottom: 10px;
 }
 
+.restart-hint {
+    margin-top: 10px;
+    color: #666;
+    font-size: 0.8rem;
+}
+
 .controls-hint {
     color: #888;
     font-size: 0.9rem;

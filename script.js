@@ -329,8 +329,17 @@ const handleInput = (key) => {
 };
 
 document.addEventListener('keydown', (e) => {
-    if (overlay.classList.contains('hidden')) handleInput(e.key);
-    else if (!isGameOver && e.key !== 'Tab') startGame();
+    if (overlay.classList.contains('hidden')) {
+        handleInput(e.key);
+    } else {
+        // Start or Restart with Space/Enter or any key (if not game over)
+        const isRestartKey = e.key === ' ' || e.key === 'Enter';
+        if (isGameOver) {
+            if (isRestartKey) startGame();
+        } else if (e.key !== 'Tab') {
+            startGame();
+        }
+    }
 });
 
 let touchStartX = 0;
