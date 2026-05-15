@@ -19,6 +19,66 @@ const MIN_MOVE_INTERVAL = 40;
 const MAX_OBSTACLES = 15;
 const POISON_DURATION = 10000; // 10 seconds
 
+// Audio Context
+let audioCtx = null;
+
+function initAudio() {
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+}
+
+function playSound(type) {
+    if (!audioCtx) return;
+    
+    // Resume audio context if it's suspended (browser security)
+    if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+    }
+
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+
+    const now = audioCtx.currentTime;
+
+    if (type === 'eat') {
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+    } else if (type === 'poison') {
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(110, now + 0.2);
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+        osc.start(now);
+        osc.stop(now + 0.2);
+    } else if (type === 'gameOver') {
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.5);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.5);
+        osc.start(now);
+        osc.stop(now + 0.5);
+    } else if (type === 'scissors') {
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(660, now);
+        osc.frequency.setValueAtTime(880, now + 0.05);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+        osc.start(now);
+        osc.stop(now + 0.1);
+    }
+}
+
 // Game State
 let snake = [];
 let food = {};
@@ -115,7 +175,6 @@ function getSafeRandomPos() {
 
 function createFood() {
     food = getSafeRandomPos();
-    // Randomly spawn poison apple (20% chance)
     if (Math.random() < 0.2 && !poisonApple) {
         poisonApple = getSafeRandomPos();
     }
@@ -150,7 +209,6 @@ function update(currentTime) {
         }
     }
 
-    // Check for scissors spawn
     if (score >= 300 && !scissorsSpawned) {
         spawnScissors();
     }
@@ -168,33 +226,28 @@ function move() {
     direction = nextDirection;
     const head = { x: snake[0].x + direction.x, y: snake[0].y + direction.y };
 
-    // Wall collision
     const cols = canvas.width / GRID_SIZE;
     const rows = canvas.height / GRID_SIZE;
     if (head.x < 0 || head.x >= cols || head.y < 0 || head.y >= rows) return gameOver();
-
-    // Self collision
     if (snake.some(seg => seg.x === head.x && seg.y === head.y)) return gameOver();
-
-    // Obstacle collision
     if (isObstacleMode && obstacles.some(obs => obs.x === head.x && obs.y === head.y)) return gameOver();
 
     snake.unshift(head);
 
-    // Food collision
     if (head.x === food.x && head.y === food.y) {
         handleScore(10);
+        playSound('eat');
         createFood();
         if (moveInterval > MIN_MOVE_INTERVAL) moveInterval -= 2;
     } 
-    // Poison Apple collision
     else if (poisonApple && head.x === poisonApple.x && head.y === poisonApple.y) {
         handleScore(30);
+        playSound('poison');
         activatePoison();
         poisonApple = null;
     }
-    // Scissors collision
     else if (scissors && head.x === scissors.x && head.y === scissors.y) {
+        playSound('scissors');
         const newLength = Math.max(3, Math.floor(snake.length / 2));
         while (snake.length > newLength) snake.pop();
         scissors = null;
@@ -230,7 +283,6 @@ function draw(currentTime) {
 
     const progress = Math.min((currentTime - lastMoveTime) / moveInterval, 1);
 
-    // Draw Obstacles
     if (isObstacleMode) {
         ctx.fillStyle = '#FFA500';
         ctx.shadowBlur = 10;
@@ -240,7 +292,6 @@ function draw(currentTime) {
         });
     }
 
-    // Draw Poison Apple
     if (poisonApple) {
         ctx.fillStyle = '#9D00FF';
         ctx.shadowBlur = 15;
@@ -248,7 +299,6 @@ function draw(currentTime) {
         ctx.fillRect(poisonApple.x * GRID_SIZE + 4, poisonApple.y * GRID_SIZE + 4, GRID_SIZE - 8, GRID_SIZE - 8);
     }
 
-    // Draw Scissors
     if (scissors) {
         ctx.fillStyle = '#00D4FF';
         ctx.shadowBlur = 15;
@@ -257,7 +307,6 @@ function draw(currentTime) {
         ctx.fillText('✂️', scissors.x * GRID_SIZE, (scissors.y + 1) * GRID_SIZE - 2);
     }
 
-    // Draw Food
     ctx.fillStyle = '#FF007F';
     ctx.shadowBlur = 15;
     ctx.shadowColor = '#FF007F';
@@ -265,7 +314,6 @@ function draw(currentTime) {
     ctx.arc(food.x * GRID_SIZE + GRID_SIZE / 2, food.y * GRID_SIZE + GRID_SIZE / 2, GRID_SIZE / 2 - 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Draw Snake
     snake.forEach((seg, i) => {
         let drawX, drawY;
         if (i === 0) {
@@ -296,6 +344,7 @@ function draw(currentTime) {
 
 function gameOver() {
     isGameOver = true;
+    playSound('gameOver');
     finalScoreEl.textContent = score;
     gameOverScreen.classList.remove('hidden');
     startScreen.classList.add('hidden');
@@ -304,6 +353,7 @@ function gameOver() {
 }
 
 function startGame() {
+    initAudio();
     overlay.classList.add('hidden');
     initGame();
     isPaused = false;
@@ -332,7 +382,6 @@ document.addEventListener('keydown', (e) => {
     if (overlay.classList.contains('hidden')) {
         handleInput(e.key);
     } else {
-        // Start or Restart with Space/Enter or any key (if not game over)
         const isRestartKey = e.key === ' ' || e.key === 'Enter';
         if (isGameOver) {
             if (isRestartKey) startGame();
