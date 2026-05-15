@@ -116,6 +116,33 @@ button:hover {
     color: #888;
     font-size: 0.9rem;
     text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.customize-section {
+    margin-top: 5px;
+}
+
+.upload-label {
+    display: inline-block;
+    padding: 8px 16px;
+    font-size: 0.8rem;
+    color: #aaa;
+    border: 1px dashed #555;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.upload-label:hover {
+    color: var(--snake-color);
+    border-color: var(--snake-color);
+}
+
+#head-image-upload {
+    display: none;
 }
 
 @media (max-width: 400px) {
